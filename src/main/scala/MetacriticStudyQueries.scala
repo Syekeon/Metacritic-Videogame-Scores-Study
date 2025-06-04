@@ -12,7 +12,7 @@ object MetacriticStudyQueries extends App {
     .getOrCreate()
 
   // Ruta al archivo CSV
-  val dataFilePath = "src/main/scala/data/metacritic_games_reduced.csv"
+  val dataFilePath = "src/main/scala/data/metacritic_games_scores.csv"
 
   val dataSchema = StructType(List(
     StructField("link", StringType, true),
@@ -96,7 +96,7 @@ object MetacriticStudyQueries extends App {
       sum("critic_reviews_count").alias("critic_reviews")
     )
     .filter(col("year").isNotNull)
-    .orderBy("year")
+    .orderBy(asc("year"))
 
   reviewsPerYear.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/4_reviews_per_year")
 
@@ -110,8 +110,8 @@ object MetacriticStudyQueries extends App {
       count("*").alias("num_games")
     )
     .filter(col("num_games") > 10)
-    .withColumn("gap", col("avg_user_score") - col("avg_metascore"))
-    .orderBy(asc("gap"))
+    .withColumn("gap", (col("avg_user_score") * 10) - col("avg_metascore"))
+    .orderBy(desc("gap"))
 
   underratedGenres.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/5_underrated_genres")
 
@@ -119,24 +119,23 @@ object MetacriticStudyQueries extends App {
   val polarizingGames = metacriticDataFrame
     .withColumn("polarization", (col("positive_user_reviews_count") + col("negative_user_reviews_count")) / col("user_reviews_count"))
     .filter(col("user_reviews_count") > 10 && col("polarization").isNotNull)
-    .select("name", "polarization", "user_score", "metascore")
+    .select("name", "polarization", "positive_user_reviews_count", "negative_user_reviews_count")
     .orderBy(desc("polarization"))
 
   polarizingGames.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/6_polarizing_games")
 
-  // Consulta 7: Discrepancia crítica vs usuario por desarrolladora
-  val devDiscrepancy = metacriticDataFrame
-    .groupBy("developer")
+  // Consulta 7: Discrepancia crítica vs usuario por publicadora
+  val publisherDiscrepancy = metacriticDataFrame
+    .groupBy("publisher")
     .agg(
       avg("metascore").alias("avg_metascore"),
-      avg("user_score").alias("avg_user_score"),
-      count("*").alias("count")
+      avg("user_score").alias("avg_user_score")
     )
-    .withColumn("gap", col("avg_user_score") - col("avg_metascore"))
-    .filter(col("count") >= 3)
+    .filter(col("publisher").isNotNull && col("avg_metascore").isNotNull && col("avg_user_score").isNotNull)
+    .withColumn("gap", abs(col("avg_metascore") - (col("avg_user_score") * 10)))
     .orderBy(desc("gap"))
 
-  devDiscrepancy.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/7_dev_discrepancy")
+  publisherDiscrepancy.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/7_publisher_discrepancy")
 
   // Fin del tiempo de ejecución de las consultas
   val endTimeExecution = System.nanoTime()
