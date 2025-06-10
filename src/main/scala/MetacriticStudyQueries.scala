@@ -4,15 +4,13 @@ import org.apache.spark.sql.functions._
 
 object MetacriticStudyQueries extends App {
   val nThreads = '*'
+  val dataFileFormat = "csv" // "csv" o "parquet" para elegir el formato del dataset
 
   // Crear una SparkSession
   val spark = SparkSession.builder()
     .appName("Metacritic Study")
     .master(s"local[$nThreads]")
     .getOrCreate()
-
-  // Ruta al archivo CSV
-  val dataFilePath = "src/main/scala/data/metacritic_games_scores.csv"
 
   val dataSchema = StructType(List(
     StructField("link", StringType, true),
@@ -36,12 +34,26 @@ object MetacriticStudyQueries extends App {
     StructField("negative_user_reviews_count", IntegerType, true)
   ))
 
-  // Leer el archivo CSV
-  val metacriticDataFrame = spark.read
-    .schema(dataSchema)
-    .option("header", "true")
-    .csv(dataFilePath)
+  val dataFilePath = dataFileFormat match {
+    case "csv" =>
+      "src/main/scala/data/metacritic_games_scores.csv"
 
+    case "parquet" =>
+      "src/main/scala/data/metacritic_games_scores.parquet"
+  }
+
+  val metacriticDataFrame = dataFileFormat match {
+    case "csv" =>
+      spark.read
+        .schema(dataSchema)
+        .option("header", "true")
+        .csv(dataFilePath)
+
+    case "parquet" =>
+      spark.read
+        .schema(dataSchema)
+        .parquet(dataFilePath)
+  }
 
   /* CONSULTAS */
 
@@ -59,7 +71,11 @@ object MetacriticStudyQueries extends App {
     .filter(col("year").isNotNull)
     .orderBy("year")
 
-  scoresOverTime.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/1_scores_over_time")
+  if (dataFileFormat == "csv") {
+    scoresOverTime.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/1_scores_over_time")
+  } else {
+    scoresOverTime.coalesce(1).write.parquet("src/main/jupyter/data_filtered/parquet/1_scores_over_time")
+  }
 
   // Consulta 2: Géneros mejor valorados
   val bestGenres = metacriticDataFrame
@@ -73,7 +89,11 @@ object MetacriticStudyQueries extends App {
     .filter(col("num_games") > 10)
     .orderBy(desc("avg_metascore"))
 
-  bestGenres.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/2_best_genres")
+  if (dataFileFormat == "csv") {
+    bestGenres.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/2_best_genres")
+  } else {
+    bestGenres.coalesce(1).write.parquet("src/main/jupyter/data_filtered/parquet/2_best_genres")
+  }
 
   // Consulta 3: Desarrolladoras con mejor media de calidad
   val topDevs = metacriticDataFrame
@@ -85,7 +105,11 @@ object MetacriticStudyQueries extends App {
     .filter(col("num_games") >= 3 && col("developer").isNotNull)
     .orderBy(desc("avg_metascore"))
 
-  topDevs.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/3_top_developers")
+  if (dataFileFormat == "csv") {
+    topDevs.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/3_top_developers")
+  } else {
+    topDevs.coalesce(1).write.parquet("src/main/jupyter/data_filtered/parquet/3_top_developers")
+  }
 
   // Consulta 4: Reseñas por año de lanzamiento
   val reviewsPerYear = metacriticDataFrame
@@ -98,7 +122,11 @@ object MetacriticStudyQueries extends App {
     .filter(col("year").isNotNull)
     .orderBy(asc("year"))
 
-  reviewsPerYear.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/4_reviews_per_year")
+  if (dataFileFormat == "csv") {
+    reviewsPerYear.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/4_reviews_per_year")
+  } else {
+    reviewsPerYear.coalesce(1).write.parquet("src/main/jupyter/data_filtered/parquet/4_reviews_per_year")
+  }
 
   // Consulta 5: Géneros más infravalorados
   val underratedGenres = metacriticDataFrame
@@ -113,7 +141,11 @@ object MetacriticStudyQueries extends App {
     .withColumn("gap", (col("avg_user_score") * 10) - col("avg_metascore"))
     .orderBy(desc("gap"))
 
-  underratedGenres.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/5_underrated_genres")
+  if (dataFileFormat == "csv") {
+    underratedGenres.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/5_underrated_genres")
+  } else {
+    underratedGenres.coalesce(1).write.parquet("src/main/jupyter/data_filtered/parquet/5_underrated_genres")
+  }
 
   // Consulta 6: Polarización de usuarios por juego
   val polarizingGames = metacriticDataFrame
@@ -122,7 +154,11 @@ object MetacriticStudyQueries extends App {
     .select("name", "polarization", "positive_user_reviews_count", "negative_user_reviews_count")
     .orderBy(desc("polarization"))
 
-  polarizingGames.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/6_polarizing_games")
+  if (dataFileFormat == "csv") {
+    polarizingGames.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/6_polarizing_games")
+  } else {
+    polarizingGames.coalesce(1).write.parquet("src/main/jupyter/data_filtered/parquet/6_polarizing_games")
+  }
 
   // Consulta 7: Discrepancia crítica vs usuario por publicadora
   val publisherDiscrepancy = metacriticDataFrame
@@ -135,7 +171,11 @@ object MetacriticStudyQueries extends App {
     .withColumn("gap", abs(col("avg_metascore") - (col("avg_user_score") * 10)))
     .orderBy(desc("gap"))
 
-  publisherDiscrepancy.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/7_publisher_discrepancy")
+  if (dataFileFormat == "csv") {
+    publisherDiscrepancy.coalesce(1).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/7_publisher_discrepancy")
+  } else {
+    publisherDiscrepancy.coalesce(1).write.parquet("src/main/jupyter/data_filtered/parquet/7_publisher_discrepancy")
+  }
 
   // Fin del tiempo de ejecución de las consultas
   val endTimeExecution = System.nanoTime()
