@@ -4,7 +4,7 @@ import org.apache.spark.sql.functions._
 
 object MetacriticStudyQueries extends App {
   val nThreads = '*'
-  val dataFileFormat = "parquet" // "csv" o "parquet" para elegir el formato del dataset
+  val dataFileFormat = "csv" // "csv" o "parquet" para elegir el formato del dataset
 
   // Crear una SparkSession
   val spark = SparkSession.builder()
@@ -60,6 +60,7 @@ object MetacriticStudyQueries extends App {
   // Comienzo del tiempo de ejecución de las consultas
   val startTimeExecution = System.nanoTime()
 
+  // Consulta auxiliar para filtrar videojuegos duplicados
   val gamesFiltered = metacriticDataFrame
     .select("name", "developer", "publisher", "metascore", "user_score")
     .filter(col("metascore").isNotNull && col("user_score").isNotNull)
@@ -176,7 +177,7 @@ object MetacriticStudyQueries extends App {
     polarizingGames.write.parquet("src/main/jupyter/data_filtered/parquet/6_polarizing_games")
   }
 
-  // Consulta 7: Discrepancia crítica vs usuario por publicadora
+  // Consulta 7: Discrepancia crítica vs usuario por editora
   val publisherDiscrepancy = gamesFiltered
     .groupBy("publisher")
     .agg(
