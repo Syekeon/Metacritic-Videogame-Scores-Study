@@ -37,9 +37,11 @@ object MetacriticStudyQueries extends App {
   val dataFilePath = dataFileFormat match {
     case "csv" =>
       "src/main/scala/data/metacritic_games_scores.csv"
+      // "s3://metacritic-study/input/metacritic_games_scores.csv"
 
     case "parquet" =>
       "src/main/scala/data/metacritic_games_scores.parquet"
+      // "s3://metacritic-study/input/metacritic_games_scores.parquet"
   }
 
   val metacriticDataFrame = dataFileFormat match {
@@ -79,8 +81,10 @@ object MetacriticStudyQueries extends App {
 
   if (dataFileFormat == "csv") {
     scoresOverTime.write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/1_scores_over_time")
+    // scoresOverTime.write.option("header", "true").csv("s3://metacritic-study/output/csv/1_scores_over_time")
   } else {
     scoresOverTime.write.parquet("src/main/jupyter/data_filtered/parquet/1_scores_over_time")
+    // scoresOverTime.write.parquet("s3://metacritic-study/output/parquet/1_scores_over_time")
   }
 
   // Consulta 2: Géneros mejor valorados
@@ -97,9 +101,13 @@ object MetacriticStudyQueries extends App {
   if (dataFileFormat == "csv") {
     bestGenres.orderBy(desc("avg_metascore")).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/2_best_genres_meta")
     bestGenres.orderBy(desc("avg_user_score")).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/2_best_genres_user")
+    // bestGenres.orderBy(desc("avg_metascore")).write.option("header", "true").csv("s3://metacritic-study/output/csv/2_best_genres_meta")
+    // bestGenres.orderBy(desc("avg_user_score")).write.option("header", "true").csv("s3://metacritic-study/output/csv/2_best_genres_user")
   } else {
     bestGenres.orderBy(desc("avg_metascore")).write.parquet("src/main/jupyter/data_filtered/parquet/2_best_genres_meta")
     bestGenres.orderBy(desc("avg_user_score")).write.parquet("src/main/jupyter/data_filtered/parquet/2_best_genres_user")
+    // bestGenres.orderBy(desc("avg_metascore")).write.parquet("s3://metacritic-study/output/parquet/2_best_genres_meta")
+    // bestGenres.orderBy(desc("avg_user_score")).write.parquet("s3://metacritic-study/output/parquet/2_best_genres_user")
   }
 
   // Consulta 3: Desarrolladoras con mejor media de calidad
@@ -116,9 +124,13 @@ object MetacriticStudyQueries extends App {
   if (dataFileFormat == "csv") {
     topDevs.orderBy(desc("avg_metascore")).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/3_top_developers_meta")
     topDevs.orderBy(desc("avg_user_score")).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/3_top_developers_user")
+    // topDevs.orderBy(desc("avg_metascore")).write.option("header", "true").csv("s3://metacritic-study/output/csv/3_top_developers_meta")
+    // topDevs.orderBy(desc("avg_user_score")).write.option("header", "true").csv("s3://metacritic-study/output/csv/3_top_developers_user")
   } else {
     topDevs.orderBy(desc("avg_metascore")).write.parquet("src/main/jupyter/data_filtered/parquet/3_top_developers_meta")
     topDevs.orderBy(desc("avg_user_score")).write.parquet("src/main/jupyter/data_filtered/parquet/3_top_developers_user")
+    // topDevs.orderBy(desc("avg_metascore")).write.parquet("s3://metacritic-study/output/parquet/3_top_developers_meta")
+    // topDevs.orderBy(desc("avg_user_score")).write.parquet("s3://metacritic-study/output/parquet/3_top_developers_user")
   }
 
   // Consulta 4: Reseñas por año de lanzamiento
@@ -134,8 +146,10 @@ object MetacriticStudyQueries extends App {
 
   if (dataFileFormat == "csv") {
     reviewsPerYear.write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/4_reviews_per_year")
+    // reviewsPerYear.write.option("header", "true").csv("s3://metacritic-study/output/csv/4_reviews_per_year")
   } else {
     reviewsPerYear.write.parquet("src/main/jupyter/data_filtered/parquet/4_reviews_per_year")
+    // reviewsPerYear.write.parquet("s3://metacritic-study/output/parquet/4_reviews_per_year")
   }
 
   // Consulta 5: Géneros más infravalorados
@@ -153,8 +167,10 @@ object MetacriticStudyQueries extends App {
 
   if (dataFileFormat == "csv") {
     underratedGenres.write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/5_underrated_genres")
+    // underratedGenres.write.option("header", "true").csv("s3://metacritic-study/output/csv/5_underrated_genres")
   } else {
     underratedGenres.write.parquet("src/main/jupyter/data_filtered/parquet/5_underrated_genres")
+    // underratedGenres.write.parquet("s3://metacritic-study/output/parquet/5_underrated_genres")
   }
 
   // Consulta 6: Polarización de usuarios por videojuego
@@ -173,8 +189,10 @@ object MetacriticStudyQueries extends App {
 
   if (dataFileFormat == "csv") {
     polarizingGames.write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/6_polarizing_games")
+    // polarizingGames.write.option("header", "true").csv("s3://metacritic-study/output/csv/6_polarizing_games")
   } else {
     polarizingGames.write.parquet("src/main/jupyter/data_filtered/parquet/6_polarizing_games")
+    // polarizingGames.write.parquet("s3://metacritic-study/output/parquet/6_polarizing_games")
   }
 
   // Consulta 7: Discrepancia crítica vs usuario por editora
@@ -190,8 +208,10 @@ object MetacriticStudyQueries extends App {
 
   if (dataFileFormat == "csv") {
     publisherDiscrepancy.write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/7_publisher_discrepancy")
+    // publisherDiscrepancy.write.option("header", "true").csv("s3://metacritic-study/output/csv/7_publisher_discrepancy")
   } else {
     publisherDiscrepancy.write.parquet("src/main/jupyter/data_filtered/parquet/7_publisher_discrepancy")
+    // publisherDiscrepancy.write.parquet("s3://metacritic-study/output/parquet/7_publisher_discrepancy")
   }
 
   // Fin del tiempo de ejecución de las consultas
