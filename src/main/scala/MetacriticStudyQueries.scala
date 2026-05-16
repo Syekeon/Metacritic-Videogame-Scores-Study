@@ -3,15 +3,41 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions._
 
 object MetacriticStudyQueries extends App {
-  val nThreads = '*'
+  val nThreads = "*"
   val dataFileFormat = "csv" // "csv" o "parquet" para elegir el formato del dataset
+  val envProject = "local"   // "local" o "aws" para elegir el entorno de ejecución
 
-  // Crear una SparkSession
+  // Asignación de las rutas de entrada y salida dependiendo del entorno seleccionado
+  val (inputPath, outputPath) = envProject match {
+    case "local" =>
+      ("src/main/scala/data", "src/main/jupyter/data_filtered")
+
+    case "aws" =>
+      ("s3://tfg-metacritic-study/input", "s3://tfg-metacritic-study/output")
+
+    case _ =>
+      throw new IllegalArgumentException("Invalid environment. Use 'local' or 'aws'")
+  }
+
+  // Construcción de la ruta completa del conjunto de datos basada en el formato elegido
+  val dataFilePath = dataFileFormat match {
+    case "csv" =>
+      s"$inputPath/metacritic_games_scores.csv"
+
+    case "parquet" =>
+      s"$inputPath/metacritic_games_scores.parquet"
+
+    case _ =>
+      throw new IllegalArgumentException("Invalid format. Use 'csv' or 'parquet'")
+  }
+
+  // Inicialización de la SparkSession (Nota: Si vas a ejecutar en AWS, debes quitar el ".master()")
   val spark = SparkSession.builder()
-    .appName("Metacritic Study")
+    .appName("TFG Metacritic Study")
     .master(s"local[$nThreads]")
     .getOrCreate()
 
+  // Definición explícita del esquema de datos
   val dataSchema = StructType(List(
     StructField("link", StringType, true),
     StructField("name", StringType, true),
@@ -34,16 +60,7 @@ object MetacriticStudyQueries extends App {
     StructField("negative_user_reviews_count", IntegerType, true)
   ))
 
-  val dataFilePath = dataFileFormat match {
-    case "csv" =>
-      "src/main/scala/data/metacritic_games_scores.csv"
-      // "s3://metacritic-study/input/metacritic_games_scores.csv"
-
-    case "parquet" =>
-      "src/main/scala/data/metacritic_games_scores.parquet"
-      // "s3://metacritic-study/input/metacritic_games_scores.parquet"
-  }
-
+  // Carga del DataFrame usando la ruta, esquema y opciones correspondientes al formato
   val metacriticDataFrame = dataFileFormat match {
     case "csv" =>
       spark.read
@@ -57,18 +74,29 @@ object MetacriticStudyQueries extends App {
         .parquet(dataFilePath)
   }
 
-  /* CONSULTAS */
+  // Función auxiliar para guardar los resultados de las queries
+  def saveResults(df: DataFrame, folderName: String): Unit = {
+    val fullOutputPath = s"$outputPath/$dataFileFormat/$folderName"
 
-  // Comienzo del tiempo de ejecución de las consultas
+    if (dataFileFormat == "csv") {
+      df.write.mode("overwrite").option("header", "true").csv(fullOutputPath)
+    } else {
+      df.write.mode("overwrite").parquet(fullOutputPath)
+    }
+  }
+
+  /* QUERIES */
+
+  // Comienzo del tiempo de ejecución de las queries
   val startTimeExecution = System.nanoTime()
 
-  // Consulta auxiliar para filtrar videojuegos duplicados
+  // Query auxiliar para filtrar videojuegos duplicados
   val gamesFiltered = metacriticDataFrame
     .select("name", "developer", "publisher", "metascore", "user_score")
     .filter(col("metascore").isNotNull && col("user_score").isNotNull)
     .dropDuplicates("name")
 
-  // Consulta 1: Evolución de puntuaciones a lo largo del tiempo
+  // Query 1: Evolución de puntuaciones a lo largo del tiempo
   val scoresOverTime = metacriticDataFrame
     .withColumn("year", year(col("release_date")))
     .groupBy("year")
@@ -79,15 +107,9 @@ object MetacriticStudyQueries extends App {
     .filter(col("year").isNotNull)
     .orderBy("year")
 
-  if (dataFileFormat == "csv") {
-    scoresOverTime.write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/1_scores_over_time")
-    // scoresOverTime.write.option("header", "true").csv("s3://metacritic-study/output/csv/1_scores_over_time")
-  } else {
-    scoresOverTime.write.parquet("src/main/jupyter/data_filtered/parquet/1_scores_over_time")
-    // scoresOverTime.write.parquet("s3://metacritic-study/output/parquet/1_scores_over_time")
-  }
+  saveResults(scoresOverTime, "1_scores_over_time")
 
-  // Consulta 2: Géneros mejor valorados
+  // Query 2: Géneros mejor valorados
   val bestGenres = metacriticDataFrame
     .withColumn("genre", explode(split(col("genres"), ",")))
     .groupBy("genre")
@@ -98,19 +120,10 @@ object MetacriticStudyQueries extends App {
     )
     .filter(col("num_games") >= 20)
 
-  if (dataFileFormat == "csv") {
-    bestGenres.orderBy(desc("avg_metascore")).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/2_best_genres_meta")
-    bestGenres.orderBy(desc("avg_user_score")).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/2_best_genres_user")
-    // bestGenres.orderBy(desc("avg_metascore")).write.option("header", "true").csv("s3://metacritic-study/output/csv/2_best_genres_meta")
-    // bestGenres.orderBy(desc("avg_user_score")).write.option("header", "true").csv("s3://metacritic-study/output/csv/2_best_genres_user")
-  } else {
-    bestGenres.orderBy(desc("avg_metascore")).write.parquet("src/main/jupyter/data_filtered/parquet/2_best_genres_meta")
-    bestGenres.orderBy(desc("avg_user_score")).write.parquet("src/main/jupyter/data_filtered/parquet/2_best_genres_user")
-    // bestGenres.orderBy(desc("avg_metascore")).write.parquet("s3://metacritic-study/output/parquet/2_best_genres_meta")
-    // bestGenres.orderBy(desc("avg_user_score")).write.parquet("s3://metacritic-study/output/parquet/2_best_genres_user")
-  }
+  saveResults(bestGenres.orderBy(desc("avg_metascore")), "2_best_genres_meta")
+  saveResults(bestGenres.orderBy(desc("avg_user_score")), "2_best_genres_user")
 
-  // Consulta 3: Desarrolladoras con mejor media de calidad
+  // Query 3: Desarrolladoras con mejor media de calidad
   val topDevs = gamesFiltered
     .withColumn("developer", explode(split(col("developer"), ",")))
     .groupBy("developer")
@@ -121,19 +134,10 @@ object MetacriticStudyQueries extends App {
     )
     .filter(col("num_games") >= 3 && col("developer").isNotNull)
 
-  if (dataFileFormat == "csv") {
-    topDevs.orderBy(desc("avg_metascore")).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/3_top_developers_meta")
-    topDevs.orderBy(desc("avg_user_score")).write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/3_top_developers_user")
-    // topDevs.orderBy(desc("avg_metascore")).write.option("header", "true").csv("s3://metacritic-study/output/csv/3_top_developers_meta")
-    // topDevs.orderBy(desc("avg_user_score")).write.option("header", "true").csv("s3://metacritic-study/output/csv/3_top_developers_user")
-  } else {
-    topDevs.orderBy(desc("avg_metascore")).write.parquet("src/main/jupyter/data_filtered/parquet/3_top_developers_meta")
-    topDevs.orderBy(desc("avg_user_score")).write.parquet("src/main/jupyter/data_filtered/parquet/3_top_developers_user")
-    // topDevs.orderBy(desc("avg_metascore")).write.parquet("s3://metacritic-study/output/parquet/3_top_developers_meta")
-    // topDevs.orderBy(desc("avg_user_score")).write.parquet("s3://metacritic-study/output/parquet/3_top_developers_user")
-  }
+  saveResults(topDevs.orderBy(desc("avg_metascore")), "3_top_developers_meta")
+  saveResults(topDevs.orderBy(desc("avg_user_score")), "3_top_developers_user")
 
-  // Consulta 4: Reseñas por año de lanzamiento
+  // Query 4: Reseñas por año de lanzamiento
   val reviewsPerYear = metacriticDataFrame
     .withColumn("year", year(col("release_date")))
     .groupBy("year")
@@ -144,15 +148,9 @@ object MetacriticStudyQueries extends App {
     .filter(col("year").isNotNull)
     .orderBy(asc("year"))
 
-  if (dataFileFormat == "csv") {
-    reviewsPerYear.write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/4_reviews_per_year")
-    // reviewsPerYear.write.option("header", "true").csv("s3://metacritic-study/output/csv/4_reviews_per_year")
-  } else {
-    reviewsPerYear.write.parquet("src/main/jupyter/data_filtered/parquet/4_reviews_per_year")
-    // reviewsPerYear.write.parquet("s3://metacritic-study/output/parquet/4_reviews_per_year")
-  }
+  saveResults(reviewsPerYear, "4_reviews_per_year")
 
-  // Consulta 5: Géneros más infravalorados
+  // Query 5: Géneros más infravalorados
   val underratedGenres = metacriticDataFrame
     .withColumn("genre", explode(split(col("genres"), ",")))
     .groupBy("genre")
@@ -165,15 +163,9 @@ object MetacriticStudyQueries extends App {
     .withColumn("gap", (col("avg_user_score") * 10) - col("avg_metascore"))
     .orderBy(desc("gap"))
 
-  if (dataFileFormat == "csv") {
-    underratedGenres.write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/5_underrated_genres")
-    // underratedGenres.write.option("header", "true").csv("s3://metacritic-study/output/csv/5_underrated_genres")
-  } else {
-    underratedGenres.write.parquet("src/main/jupyter/data_filtered/parquet/5_underrated_genres")
-    // underratedGenres.write.parquet("s3://metacritic-study/output/parquet/5_underrated_genres")
-  }
+  saveResults(underratedGenres, "5_underrated_genres")
 
-  // Consulta 6: Polarización de usuarios por videojuego
+  // Query 6: Polarización de usuarios por videojuego
   val polarizingGames = metacriticDataFrame
     .withColumnRenamed("name", "game")
     .groupBy("game")
@@ -187,15 +179,9 @@ object MetacriticStudyQueries extends App {
     .withColumn("polarization", (col("positive_user_reviews") + col("negative_user_reviews")) / col("total_user_reviews"))
     .orderBy(desc("polarization"))
 
-  if (dataFileFormat == "csv") {
-    polarizingGames.write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/6_polarizing_games")
-    // polarizingGames.write.option("header", "true").csv("s3://metacritic-study/output/csv/6_polarizing_games")
-  } else {
-    polarizingGames.write.parquet("src/main/jupyter/data_filtered/parquet/6_polarizing_games")
-    // polarizingGames.write.parquet("s3://metacritic-study/output/parquet/6_polarizing_games")
-  }
+  saveResults(polarizingGames, "6_polarizing_games")
 
-  // Consulta 7: Discrepancia crítica vs usuario por editora
+  // Query 7: Discrepancia crítica vs usuario por editora
   val publisherDiscrepancy = gamesFiltered
     .groupBy("publisher")
     .agg(
@@ -206,21 +192,15 @@ object MetacriticStudyQueries extends App {
     .withColumn("gap", abs(col("avg_metascore") - (col("avg_user_score") * 10)))
     .orderBy(desc("gap"))
 
-  if (dataFileFormat == "csv") {
-    publisherDiscrepancy.write.option("header", "true").csv("src/main/jupyter/data_filtered/csv/7_publisher_discrepancy")
-    // publisherDiscrepancy.write.option("header", "true").csv("s3://metacritic-study/output/csv/7_publisher_discrepancy")
-  } else {
-    publisherDiscrepancy.write.parquet("src/main/jupyter/data_filtered/parquet/7_publisher_discrepancy")
-    // publisherDiscrepancy.write.parquet("s3://metacritic-study/output/parquet/7_publisher_discrepancy")
-  }
+  saveResults(publisherDiscrepancy, "7_publisher_discrepancy")
 
-  // Fin del tiempo de ejecución de las consultas
+  // Fin del tiempo de ejecución de las queries
   val endTimeExecution = System.nanoTime()
 
   // Cálculo del tiempo de ejecución total
   val totalTimeExecution = (endTimeExecution - startTimeExecution) / 1e9d
   println(s"Queries execution time: $totalTimeExecution seconds")
 
-  // Detener la SparkSession
+  // Detención de la SparkSession
   spark.stop()
 }

@@ -2,11 +2,14 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 
 object CSVParquetTransform extends App {
+  val nThreads = "*"
+
   val spark = SparkSession.builder()
-    .appName("CSV - Parquet Transform")
-    .master("local[*]")
+    .appName("TFG Metacritic CSV->Parquet Transform")
+    .master(s"local[$nThreads]")
     .getOrCreate()
 
+  // Definición explícita del esquema de datos
   val csvSchema = StructType(List(
     StructField("link", StringType, true),
     StructField("name", StringType, true),
@@ -29,12 +32,14 @@ object CSVParquetTransform extends App {
     StructField("negative_user_reviews_count", IntegerType, true)
   ))
 
+  // Ruta del archivo CSV original y carga del archivo CSV en un DataFrame utilizando el esquema definido anteriormente
   val csvFilePath = "src/main/scala/data/metacritic_games_scores.csv"
-
   val csvDataFrame = spark.read
     .schema(csvSchema)
     .option("header", "true")
     .csv(csvFilePath)
 
+  // Transformación y escritura a formato Parquet
   csvDataFrame.coalesce(1).write.parquet("src/main/scala/data/metacritic_games_scores")
+  spark.stop()
 }
